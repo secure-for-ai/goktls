@@ -10,16 +10,16 @@ import (
 	"crypto/cipher"
 	"crypto/des"
 	"crypto/hmac"
-	"crypto/internal/boring"
 	"crypto/rc4"
 	"crypto/sha1"
 	"crypto/sha256"
 	"fmt"
 	"hash"
-	"internal/cpu"
 	"runtime"
 
+	"github.com/secure-for-ai/goktls/internal/boring"
 	"golang.org/x/crypto/chacha20poly1305"
+	"golang.org/x/sys/cpu"
 )
 
 // CipherSuite is a TLS cipher suite. Note that most functions in this package
