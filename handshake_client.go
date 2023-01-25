@@ -456,6 +456,10 @@ func (hs *clientHandshakeState) handshake() error {
 
 	c.ekm = ekmFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.hello.random, hs.serverHello.random)
 	c.isHandshakeComplete.Store(true)
+	// Enable kernel TLS if possible
+	if err := c.enableKernelTLS(c.cipherSuite, c.in.key, c.out.key, c.in.iv, c.out.iv); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -674,6 +678,8 @@ func (hs *clientHandshakeState) establishKeys() error {
 		serverCipher = hs.suite.aead(serverKey, serverIV)
 	}
 
+	c.in.key, c.in.iv = serverKey, serverIV
+	c.out.key, c.out.iv = clientKey, clientIV
 	c.in.prepareCipherSpec(c.vers, serverCipher, serverHash)
 	c.out.prepareCipherSpec(c.vers, clientCipher, clientHash)
 	return nil
