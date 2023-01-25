@@ -267,8 +267,9 @@ func (hc *halfConn) explicitNonceLen() int {
 			return c.BlockSize()
 		}
 		return 0
-	case kTLSCipher:
-		return 0
+	// never reached, thus dead code
+	// case kTLSCipher:
+	// 	return 0
 	default:
 		panic("unknown cipher type")
 	}
@@ -939,8 +940,9 @@ func (c *Conn) maxPayloadSizeForWrite(typ recordType) int {
 			// The MAC is appended before padding so affects the
 			// payload size directly.
 			payloadBytes -= c.out.mac.Size()
-		case kTLSCipher:
-			payloadBytes -= kTLSOverhead
+		// never reached, thus dead code
+		// case kTLSCipher:
+		// 	payloadBytes -= kTLSOverhead
 		default:
 			panic("unknown cipher type")
 		}
