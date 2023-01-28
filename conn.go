@@ -593,14 +593,6 @@ func (c *Conn) readChangeCipherSpec() error {
 	return c.readRecordOrCCS(true)
 }
 
-// ktlsInBufPool pools the buffers used by ktlsReadRecord.
-var ktlsInBufPool = sync.Pool{
-	New: func() any {
-		buf := make([]byte, maxPlaintext)
-		return &buf
-	},
-}
-
 // readRecordOrCCS reads one or more TLS records from the connection and
 // updates the record layer state. Some invariants:
 //   - c.in must be locked
@@ -638,17 +630,10 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 	)
 
 	if _, ok := c.in.cipher.(kTLSCipher); ok {
-		dataPtr := ktlsInBufPool.Get().(*[]byte)
-		data = *dataPtr
-		defer func() {
-			// You might be tempted to simplify this by just passing &outBuf to Put,
-			// but that would make the local copy of the outBuf slice header escape
-			// to the heap, causing an allocation. Instead, we keep around the
-			// pointer to the slice header returned by Get, which is already on the
-			// heap, and overwrite and return that.
-			*dataPtr = data[:maxPlaintext]
-			ktlsInBufPool.Put(dataPtr)
-		}()
+		if c.rawInput.Len() < maxPlaintext {
+			c.rawInput.Grow(maxPlaintext)
+		}
+		data = c.rawInput.Bytes()[:maxPlaintext]
 		if typ, n, err = ktlsReadRecord(c.conn.(*net.TCPConn), data); err != nil {
 			return err
 		}
