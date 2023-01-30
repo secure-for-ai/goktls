@@ -26,7 +26,7 @@ https://github.com/secure-for-ai/goktls_examples.
 
 - Add the package into `go.mod`
     ```go
-    require github.com/secure-for-ai/goktls v1.20rc3.0
+    require github.com/secure-for-ai/goktls v1.20.0-rc3.1
     ```
     The release version tracks the Golang main release with minor updates.
 
