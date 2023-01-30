@@ -10,7 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -69,8 +68,8 @@ func init() {
 		return
 	}
 
-	var uname syscall.Utsname
-	if err := syscall.Uname(&uname); err != nil {
+	var uname unix.Utsname
+	if err := unix.Uname(&uname); err != nil {
 		Debugf("kTLS: call uname failed %v", err)
 		return
 	}
@@ -171,12 +170,12 @@ func (c *Conn) writeToFile(f *os.File, remain int64) (written int64, err error, 
 
 	// mmap must align on a page boundary
 	// mmap from 0, use data from offset
-	bytes, err := syscall.Mmap(int(f.Fd()), 0, int(offset+remain),
-		syscall.PROT_WRITE, syscall.MAP_SHARED)
+	bytes, err := unix.Mmap(int(f.Fd()), 0, int(offset+remain),
+		unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
 		return 0, nil, false
 	}
-	defer syscall.Munmap(bytes)
+	defer unix.Munmap(bytes)
 
 	bytes = bytes[offset : offset+remain]
 	var (
@@ -245,7 +244,7 @@ func (c *Conn) spliceToFile(f *os.File, remain int64) (written int64, err error,
 			n, err = unix.Splice(int(rfd), nil, pwfd, nil, int(n), unix.SPLICE_F_MORE)
 			remain -= n
 			written += n
-			if err == syscall.EAGAIN {
+			if err == unix.EAGAIN {
 				// return false to wait data from connection
 				err = nil
 				return false
@@ -286,8 +285,8 @@ func (c *Conn) spliceToFile(f *os.File, remain int64) (written int64, err error,
 
 // destroyTempPipe destroys a temporary pipe.
 func destroyTempPipe(prfd, pwfd int) error {
-	err := syscall.Close(prfd)
-	err1 := syscall.Close(pwfd)
+	err := unix.Close(prfd)
+	err1 := unix.Close(pwfd)
 	if err == nil {
 		return err1
 	}
@@ -384,15 +383,15 @@ func (c *Conn) enableKernelTLS(cipherSuiteID uint16, inKey, outKey, inIV, outIV 
 
 func ktlsReadRecord(c *net.TCPConn, b []byte) (recordType, int, error) {
 	// cmsg for record type
-	buffer := make([]byte, syscall.CmsgSpace(1))
-	cmsg := (*syscall.Cmsghdr)(unsafe.Pointer(&buffer[0]))
-	cmsg.SetLen(syscall.CmsgLen(1))
+	buffer := make([]byte, unix.CmsgSpace(1))
+	cmsg := (*unix.Cmsghdr)(unsafe.Pointer(&buffer[0]))
+	cmsg.SetLen(unix.CmsgLen(1))
 
-	var iov syscall.Iovec
+	var iov unix.Iovec
 	iov.Base = &b[0]
 	iov.SetLen(len(b))
 
-	var msg syscall.Msghdr
+	var msg unix.Msghdr
 	msg.Control = &buffer[0]
 	msg.Controllen = cmsg.Len
 	msg.Iov = &iov
@@ -407,7 +406,9 @@ func ktlsReadRecord(c *net.TCPConn, b []byte) (recordType, int, error) {
 	err0 := rwc.Read(func(fd uintptr) bool {
 		flags := 0
 		n, err = recvmsg(fd, &msg, flags)
-		if err == syscall.EAGAIN {
+		fmt.Println(cmsg.Level == SOL_TLS, cmsg.Type == TLS_GET_RECORD_TYPE, cmsg.Len)
+		if err == unix.EAGAIN {
+			fmt.Printf("***%v\n", recordType(buffer[unix.SizeofCmsghdr]))
 			// data is not ready, goroutine will be parked
 			return false
 		}
@@ -443,7 +444,7 @@ func ktlsReadRecord(c *net.TCPConn, b []byte) (recordType, int, error) {
 		Debugf("kTLS: unsupported cmsg type: %d", cmsg.Type)
 		return 0, 0, fmt.Errorf("unsupported cmsg type: %d", cmsg.Type)
 	}
-	typ := recordType(buffer[syscall.SizeofCmsghdr])
+	typ := recordType(buffer[unix.SizeofCmsghdr])
 	Debugf("kTLS: recvmsg, type: %d, payload len: %d", typ, n)
 	return typ, n, nil
 }
@@ -469,8 +470,8 @@ func ktlsReadDataFromRecord(c *net.TCPConn, b []byte) (int, error) {
 	}
 }
 
-func recvmsg(fd uintptr, msg *syscall.Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := syscall.Syscall(syscall.SYS_RECVMSG, fd, uintptr(unsafe.Pointer(msg)), uintptr(flags))
+func recvmsg(fd uintptr, msg *unix.Msghdr, flags int) (n int, err error) {
+	r0, _, e1 := unix.Syscall(unix.SYS_RECVMSG, fd, uintptr(unsafe.Pointer(msg)), uintptr(flags))
 	n = int(r0)
 	if e1 != 0 {
 		err = errnoErr(e1)
@@ -478,8 +479,8 @@ func recvmsg(fd uintptr, msg *syscall.Msghdr, flags int) (n int, err error) {
 	return
 }
 
-func sendmsg(fd uintptr, msg *syscall.Msghdr, flags int) (n int, err error) {
-	r0, _, e1 := syscall.Syscall(syscall.SYS_SENDMSG, fd, uintptr(unsafe.Pointer(msg)), uintptr(flags))
+func sendmsg(fd uintptr, msg *unix.Msghdr, flags int) (n int, err error) {
+	r0, _, e1 := unix.Syscall(unix.SYS_SENDMSG, fd, uintptr(unsafe.Pointer(msg)), uintptr(flags))
 	n = int(r0)
 	if e1 != 0 {
 		err = errnoErr(e1)
@@ -490,22 +491,22 @@ func sendmsg(fd uintptr, msg *syscall.Msghdr, flags int) (n int, err error) {
 // Do the interface allocations only once for common
 // Errno values.
 var (
-	errEAGAIN error = syscall.EAGAIN
-	errEINVAL error = syscall.EINVAL
-	errENOENT error = syscall.ENOENT
+	errEAGAIN error = unix.EAGAIN
+	errEINVAL error = unix.EINVAL
+	errENOENT error = unix.ENOENT
 )
 
 // errnoErr returns common boxed Errno values, to prevent
 // allocations at runtime.
-func errnoErr(e syscall.Errno) error {
+func errnoErr(e unix.Errno) error {
 	switch e {
 	case 0:
 		return nil
-	case syscall.EAGAIN:
+	case unix.EAGAIN:
 		return errEAGAIN
-	case syscall.EINVAL:
+	case unix.EINVAL:
 		return errEINVAL
-	case syscall.ENOENT:
+	case unix.ENOENT:
 		return errENOENT
 	}
 	return e
@@ -513,18 +514,18 @@ func errnoErr(e syscall.Errno) error {
 
 func ktlsSendCtrlMessage(c *net.TCPConn, typ recordType, b []byte) (int, error) {
 	// cmsg for record type
-	buffer := make([]byte, syscall.CmsgSpace(1))
-	cmsg := (*syscall.Cmsghdr)(unsafe.Pointer(&buffer[0]))
-	cmsg.SetLen(syscall.CmsgLen(1))
-	buffer[syscall.SizeofCmsghdr] = byte(typ)
+	buffer := make([]byte, unix.CmsgSpace(1))
+	cmsg := (*unix.Cmsghdr)(unsafe.Pointer(&buffer[0]))
+	cmsg.SetLen(unix.CmsgLen(1))
+	buffer[unix.SizeofCmsghdr] = byte(typ)
 	cmsg.Level = SOL_TLS
 	cmsg.Type = TLS_SET_RECORD_TYPE
 
-	var iov syscall.Iovec
+	var iov unix.Iovec
 	iov.Base = &b[0]
 	iov.SetLen(len(b))
 
-	var msg syscall.Msghdr
+	var msg unix.Msghdr
 	msg.Control = &buffer[0]
 	msg.Controllen = cmsg.Len
 	msg.Iov = &iov
@@ -539,7 +540,7 @@ func ktlsSendCtrlMessage(c *net.TCPConn, typ recordType, b []byte) (int, error) 
 	err0 := rwc.Write(func(fd uintptr) bool {
 		flags := 0
 		n, err = sendmsg(fd, &msg, flags)
-		if err == syscall.EAGAIN {
+		if err == unix.EAGAIN {
 			// data is not ready, goroutine will be parked
 			return false
 		}
