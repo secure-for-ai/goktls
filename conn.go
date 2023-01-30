@@ -631,7 +631,7 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 
 	if _, ok := c.in.cipher.(kTLSCipher); ok {
 		if c.rawInput.Len() < maxPlaintext {
-			c.rawInput.Grow(maxPlaintext)
+			c.rawInput.Grow(maxPlaintext - c.rawInput.Len())
 		}
 		data = c.rawInput.Bytes()[:maxPlaintext]
 		if typ, n, err = ktlsReadRecord(c.conn.(*net.TCPConn), data); err != nil {
