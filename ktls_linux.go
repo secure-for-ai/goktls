@@ -406,16 +406,14 @@ func ktlsReadRecord(c *net.TCPConn, b []byte) (recordType, int, error) {
 	err0 := rwc.Read(func(fd uintptr) bool {
 		flags := 0
 		n, err = recvmsg(fd, &msg, flags)
-		fmt.Println(cmsg.Level == SOL_TLS, cmsg.Type == TLS_GET_RECORD_TYPE, cmsg.Len)
 		if err == unix.EAGAIN {
-			fmt.Printf("***%v\n", recordType(buffer[unix.SizeofCmsghdr]))
 			// data is not ready, goroutine will be parked
 			return false
 		}
 		// n should not be zero when err == nil
-		//if err == nil && n == 0 {
-		//	err = io.EOF
-		//}
+		if err == nil && n == 0 {
+			err = io.EOF
+		}
 		return true
 	})
 	if err0 != nil {
