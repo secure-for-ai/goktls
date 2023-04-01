@@ -43,8 +43,10 @@ var (
 	kTLSSupportCHACHA20POLY1305 bool
 
 	kTLSSupportTLS13TX bool
-	// TLS1.3 RX is buggy in kernel 5.15, got weird package lost
-	// TODO: test it on kernel 5.19 or 6+
+	// TLS1.3 RX is only supported on kernel 6+.
+	// See: https://github.com/torvalds/linux/commit/ce61327ce989b63c0bd1cc7afee00e218ee696ac
+	// and https://people.kernel.org/kuba/tls-1-3-rx-improvements-in-linux-5-20
+	// TODO: test it on kernel 6+
 	kTLSSupportTLS13RX bool
 
 	// available in kernel >= 5.19 or 6+
@@ -118,10 +120,10 @@ func init() {
 
 	if (major == 5 && minor >= 19) || major > 5 {
 		kTLSSupportZEROCOPY = true
-		kTLSSupportTLS13RX = true
 	}
 
 	if major > 5 {
+		kTLSSupportTLS13RX = true
 		kTLSSupportNOPAD = true
 	}
 
