@@ -17,9 +17,9 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"internal/godebug"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"time"
 )
@@ -868,10 +868,10 @@ func (hs *clientHandshakeState) sendFinished(out []byte) error {
 // to verify the signatures of during a TLS handshake.
 const defaultMaxRSAKeySize = 8192
 
-var tlsmaxrsasize = godebug.New("tlsmaxrsasize")
+var tlsmaxrsasize = os.Getenv("tlsmaxrsasize")
 
 func checkKeySize(n int) (max int, ok bool) {
-	if v := tlsmaxrsasize.Value(); v != "" {
+	if v := tlsmaxrsasize; v != "" {
 		if max, err := strconv.Atoi(v); err == nil {
 			return max, n <= max
 		}
