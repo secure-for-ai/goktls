@@ -3,6 +3,6 @@ package tls
 
 const Dev = false
 
-func Debugln(a ...interface{}) {}
+func Debugln(a ...any) {}
 
-func Debugf(format string, a ...interface{}) {}
+func Debugf(format string, a ...any) {}
