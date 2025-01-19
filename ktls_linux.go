@@ -30,6 +30,18 @@ const (
 	kTLSOverhead = 16
 )
 
+// KTLS kernel support matrix
+// |                  | 4.13 | 4.17 | 5.1 | 5.11 | 5.19 | 6.0 |
+// |------------------|:----:|:----:|:---:|:----:|:----:|:---:|
+// | TLS 1.2 TX       |   X  |   x  |  x  |   x  |   x  |  x  |
+// | TLS 1.2 RX       |      |   x  |  x  |   x  |   x  |  x  |
+// | TLS 1.3 TX       |      |      |  x  |   x  |   x  |  x  |
+// | TLS 1.3 RX       |      |      |     |      |      |  x  |
+// | AES-GCM-128      |   x  |   x  |  x  |   x  |   x  |  x  |
+// | AES-GCM-256      |      |      |  x  |   x  |   x  |  x  |
+// | CHACHA20POLY1305 |      |      |     |   x  |   x  |  x  |
+// | TLS zerocopy     |      |      |     |      |   x  |  x  |
+// | TLS nopad        |      |      |     |      |      |  x  |
 var (
 	kTLSSupport bool
 
@@ -46,7 +58,6 @@ var (
 	// TLS1.3 RX is only supported on kernel 6+.
 	// See: https://github.com/torvalds/linux/commit/ce61327ce989b63c0bd1cc7afee00e218ee696ac
 	// and https://people.kernel.org/kuba/tls-1-3-rx-improvements-in-linux-5-20
-	// TODO: test it on kernel 6+
 	kTLSSupportTLS13RX bool
 
 	// available in kernel >= 5.19 or 6+
@@ -100,28 +111,60 @@ func init() {
 
 	Debugf("Kernel Version: %s", release)
 
+	// kernel TLS support (FEATURED)
+	// Available since 4.13
+	// Feature: TLS 1.2 TX AES-GCM-128
+	// See: https://kernelnewbies.org/Linux_4.13#Networking
 	if (major == 4 && minor >= 13) || major > 4 {
 		kTLSSupportTX = true
 		kTLSSupportAESGCM128 = true
 	}
 
+	// (FEATURED) Receive path for kernel TLS
+	// Available since 4.17
+	// Feature: TLS 1.2 TX&RX AES-GCM-128
+	// See: https://kernelnewbies.org/Linux_4.17#Networking
 	if (major == 4 && minor >= 17) || major > 4 {
 		kTLSSupportRX = true
 	}
 
+	// TLS: Add TLS 1.3 support & Support 256 bit keys
+	// Available since 5.1
+	// Feature: TLS 1.2 TX&RX AES-GCM-128/256
+	//          TLS 1.3 TX    AES-GCM-128/256
+	// See:https://kernelnewbies.org/Linux_5.1#Networking
 	if (major == 5 && minor >= 1) || major > 5 {
 		kTLSSupportAESGCM256 = true
 		kTLSSupportTLS13TX = true
 	}
 
+	// TLS: Add CHACHA20-POLY1305 cipher to Kernel
+	// Available since 5.11
+	// Feature: TLS 1.2 TX&RX AES-GCM-128/256 CHACHA20POLY1305
+	//          TLS 1.3 TX    AES-GCM-128/256 CHACHA20POLY1305
+	// See: https://kernelnewbies.org/Linux_5.11#Networking
 	if (major == 5 && minor >= 11) || major > 5 {
 		kTLSSupportCHACHA20POLY1305 = true
 	}
 
+	// TLS: Add opt-in zerocopy mode of sendfile()
+	// Available since 5.19
+	// Feature: TLS 1.2 TX&RX AES-GCM-128/256 CHACHA20POLY1305
+	//          TLS 1.3 TX    AES-GCM-128/256 CHACHA20POLY1305
+	//          TLS zerocopy sendfile()
+	// See: https://kernelnewbies.org/Linux_5.19#Networking
 	if (major == 5 && minor >= 19) || major > 5 {
 		kTLSSupportZEROCOPY = true
 	}
 
+	// TLS: rx: nopad and backlog flushing
+	//      rx: decrypt from the TCP queue
+	// Available since 6.0
+	// Feature: TLS 1.2 TX&RX AES-GCM-128/256 CHACHA20POLY1305
+	//          TLS 1.3 TX&RX AES-GCM-128/256 CHACHA20POLY130
+	//          TLS zerocopy sendfile()
+	//          TLS 1.3 only. Expect the sender to not pad records.
+	// See: https://kernelnewbies.org/Linux_6.0#Networking
 	if major > 5 {
 		kTLSSupportTLS13RX = true
 		kTLSSupportNOPAD = true
